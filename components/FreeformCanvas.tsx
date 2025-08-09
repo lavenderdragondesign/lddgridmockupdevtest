@@ -583,8 +583,8 @@ const onMouseMoveRotate = (e: MouseEvent) => {
             Auto Align
           </label>
 
-          <button className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600" onClick={() => setShowHelp(h => !h)}>
-            {showHelp ? 'Hide' : 'Shortcuts'}
+          <button className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600" onClick={() => (h => !h)}>
+            { ? 'Hide' : 'Shortcuts'}
           </button>
         </div>
 </div>
