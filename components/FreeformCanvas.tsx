@@ -436,9 +436,7 @@ export default function FreeformCanvas({ images }: Props) {
       dragOffsetRef.current = null;
       rotatingRef.current = false;
       lastGuidesRef.current = { vx: [], vy: [] };
-      const canvas = canvasRef.current as HTMLCanvasElement;
-      if (canvas) setCanvasCursor(canvas, false);
-    };
+};
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'r') {
@@ -468,12 +466,13 @@ export default function FreeformCanvas({ images }: Props) {
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'r') rotatingRef.current = false;
+      if (e.key.toLowerCase() === 'r') {
+        rotatingRef.current = false;
+        const canv = canvasRef.current as HTMLCanvasElement | null;
+        if (canv) setCanvasCursor(canv, false);
+      }
     };
-      const canvas = canvasRef.current as HTMLCanvasElement;
-      if (canvas) setCanvasCursor(canvas, false);
-
-    const onMouseMoveRotate = (e: MouseEvent) => {
+const onMouseMoveRotate = (e: MouseEvent) => {
       if (!rotatingRef.current || !activeIdRef.current) return;
       const { x, y } = clientToCanvas(e);
       const id = activeIdRef.current;
