@@ -582,11 +582,7 @@ const onMouseMoveRotate = (e: MouseEvent) => {
             <input type="checkbox" checked={snapSmart} onChange={e => setSnapSmart(e.target.checked)} />
             Auto Align
           </label>
-
-          <button className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600" onClick={() => (h => !h)}>
-            { ? 'Hide' : 'Shortcuts'}
-          </button>
-        </div>
+</div>
 </div>
     </>
   );
