@@ -499,11 +499,11 @@ export default function FreeformCanvas({ images }: Props) {
             <input type="checkbox" checked={neatMode} onChange={e => setNeatMode(e.target.checked)} />
             Neat
           </label>
-          <span className="text-[10px]">Thumb W</span>
+          <span className="text-[18px]">Thumb W</span>
           <input className="w-12 text-black text-xs px-1 rounded" type="number" min={40} max={600} value={thumbWidth} onChange={e => setThumbWidth(Number(e.target.value)||160)} />
-          <span className="text-[10px]">Gap</span>
+          <span className="text-[18px]">Gap</span>
           <input className="w-12 text-black text-xs px-1 rounded" type="number" min={0} max={100} value={thumbGap} onChange={e => setThumbGap(Number(e.target.value)||12)} />
-          <span className="text-[10px]">Max Cols</span>
+          <span className="text-[18px]">Max Cols</span>
           <input className="w-12 text-black text-xs px-1 rounded" type="number" min={1} max={20} value={maxCols} onChange={e => setMaxCols(Number(e.target.value)||5)} />
           <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={autoTidy} onChange={e => setAutoTidy(e.target.checked)} />
@@ -520,7 +520,7 @@ export default function FreeformCanvas({ images }: Props) {
           <label className="flex items-center gap-1 text-xs">
             Size
             <input type="range" min={8} max={200} step={2} value={gridSize} onChange={e => setGridSize(Number(e.target.value))} />
-            <span className="tabular-nums text-[10px]">{gridSize}px</span>
+            <span className="tabular-nums text-[18px]">{gridSize}px</span>
           </label>
           <label className="flex items-center gap-1 text-xs">
             <input type="checkbox" checked={snapGrid} onChange={e => setSnapGrid(e.target.checked)} />
@@ -532,13 +532,13 @@ export default function FreeformCanvas({ images }: Props) {
             <input type="checkbox" checked={showCells} onChange={e => setShowCells(e.target.checked)} />
             Cells
           </label>
-          <span className="text-[10px]">Rows</span>
+          <span className="text-[18px]">Rows</span>
           <input className="w-10 text-black text-xs px-1 rounded" type="number" min={1} max={12} value={rows} onChange={e => setRows(Number(e.target.value)||1)} />
-          <span className="text-[10px]">Cols</span>
+          <span className="text-[18px]">Cols</span>
           <input className="w-10 text-black text-xs px-1 rounded" type="number" min={1} max={12} value={cols} onChange={e => setCols(Number(e.target.value)||1)} />
-          <span className="text-[10px]">GapX</span>
+          <span className="text-[18px]">GapX</span>
           <input className="w-12 text-black text-xs px-1 rounded" type="number" min={0} max={200} value={cellGapX} onChange={e => setCellGapX(Number(e.target.value)||0)} />
-          <span className="text-[10px]">GapY</span>
+          <span className="text-[18px]">GapY</span>
           <input className="w-12 text-black text-xs px-1 rounded" type="number" min={0} max={200} value={cellGapY} onChange={e => setCellGapY(Number(e.target.value)||0)} />
 
           <button className="text-xs px-2 py-1 bg-lime-600 rounded hover:bg-lime-500"
@@ -558,7 +558,7 @@ export default function FreeformCanvas({ images }: Props) {
         </div>
 
         {showHelp && (
-          <div className="text-[10px] leading-tight space-y-1">
+          <div className="text-[18px] leading-tight space-y-1">
             <div><b>Select</b>: Click an image (top-most wins)</div>
             <div><b>Drag</b>: Left mouse (hold <b>Alt</b> to ignore snapping)</div>
             <div><b>Zoom</b>: Mouse wheel over selected image</div>
