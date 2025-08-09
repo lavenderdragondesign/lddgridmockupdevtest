@@ -430,9 +430,6 @@ export default function FreeformCanvas({ images }: Props) {
       if (canvas) setCanvasCursor(canvas, true);
     };
 
-      const id = activeIdRef.current;
-      setAndRedraw(prev => prev.map(p => p.id === id ? { ...p, x: snapped.x, y: snapped.y } : p));
-    };
 
     const onMouseUp = () => {
       draggingRef.current = false;
