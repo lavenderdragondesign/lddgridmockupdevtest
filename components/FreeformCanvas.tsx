@@ -50,10 +50,7 @@ export default function FreeformCanvas({ images }: Props) {
   const [cellGapX, setCellGapX] = useState(16);
   const [cellGapY, setCellGapY] = useState(16);
   const [snapSmart, setSnapSmart] = useState(true);            // align to centers/edges
-
-  const [showHelp, setShowHelp] = useState(false);
-
-  // drag/rotate state via refs (stable listeners)
+// drag/rotate state via refs (stable listeners)
   const draggingRef = useRef(false);
   const dragOffsetRef = useRef<{dx:number; dy:number} | null>(null);
   const rotatingRef = useRef(false);
@@ -218,7 +215,21 @@ export default function FreeformCanvas({ images }: Props) {
   }, [size]);
 
   // Calculate snap candidates and return snapped (nx, ny) + guides
-  const getSnapped = useCallback((nx: number, ny: number, ignoreSnap: boolean) => {
+
+  function setCanvasCursor(canvas: HTMLCanvasElement, hovering: boolean) {
+    const rotating = rotatingRef.current;
+    const dragging = draggingRef.current;
+    if (rotating || dragging) {
+      canvas.style.cursor = 'grabbing';
+    } else if (hovering) {
+      canvas.style.cursor = 'grab';
+    } else {
+      canvas.style.cursor = 'default';
+    }
+  }
+
+  const getSnapped = useCallback(
+(nx: number, ny: number, ignoreSnap: boolean) => {
     const { w, h } = size;
     const guidesX: number[] = [];
     const guidesY: number[] = [];
@@ -381,6 +392,8 @@ export default function FreeformCanvas({ images }: Props) {
         const dx = x - hit.it.x;
         const dy = y - hit.it.y;
         dragOffsetRef.current = { dx, dy };
+        const canvas = canvasRef.current as HTMLCanvasElement;
+        if (canvas) setCanvasCursor(canvas, true);
       } else {
         setActiveId(null);
         activeIdRef.current = null;
@@ -389,17 +402,33 @@ export default function FreeformCanvas({ images }: Props) {
     };
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!draggingRef.current || !dragOffsetRef.current || !activeIdRef.current) {
-        return;
-      }
+      const canvas = canvasRef.current as HTMLCanvasElement;
       const { x, y } = clientToCanvas(e);
+
+      // update hover cursor if not dragging
+      if (!draggingRef.current && canvas) {
+        const hit = hitTest(x, y);
+        setCanvasCursor(canvas, !!hit);
+      }
+
+      if (!draggingRef.current || !dragOffsetRef.current || !activeIdRef.current) return;
       const { dx, dy } = dragOffsetRef.current;
       let nx = x - dx;
       let ny = y - dy;
 
       const altDown = (e as any).altKey;
-      const snapped = getSnapped(nx, ny, altDown === true);
-      lastGuidesRef.current = { vx: snapped.guidesX, vy: snapped.guidesY };
+      if (snapSmart || snapGrid || showCells) {
+        const snapped = getSnapped(nx, ny, altDown === true);
+        lastGuidesRef.current = { vx: snapped.guidesX, vy: snapped.guidesY };
+        nx = snapped.x; ny = snapped.y;
+      }
+
+      const id = activeIdRef.current;
+      setAndRedraw(prev => prev.map(p => p.id === id ? { ...p, x: nx, y: ny } : p));
+
+      // dragging cursor
+      if (canvas) setCanvasCursor(canvas, true);
+    };
 
       const id = activeIdRef.current;
       setAndRedraw(prev => prev.map(p => p.id === id ? { ...p, x: snapped.x, y: snapped.y } : p));
@@ -410,12 +439,16 @@ export default function FreeformCanvas({ images }: Props) {
       dragOffsetRef.current = null;
       rotatingRef.current = false;
       lastGuidesRef.current = { vx: [], vy: [] };
+      const canvas = canvasRef.current as HTMLCanvasElement;
+      if (canvas) setCanvasCursor(canvas, false);
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'r') {
         rotatingRef.current = true;
         (canvas as any).focus?.();
+      const canvas = canvasRef.current as HTMLCanvasElement;
+      if (canvas) setCanvasCursor(canvas, true);
       }
       // arrow key nudge
       if (activeIdRef.current) {
@@ -440,6 +473,8 @@ export default function FreeformCanvas({ images }: Props) {
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'r') rotatingRef.current = false;
     };
+      const canvas = canvasRef.current as HTMLCanvasElement;
+      if (canvas) setCanvasCursor(canvas, false);
 
     const onMouseMoveRotate = (e: MouseEvent) => {
       if (!rotatingRef.current || !activeIdRef.current) return;
@@ -488,7 +523,7 @@ export default function FreeformCanvas({ images }: Props) {
         ref={canvasRef}
         className="absolute top-0 left-0 w-full h-full outline-none"
         aria-label="Freeform canvas"
-        style={{ cursor: rotatingRef.current ? 'grab' : 'default' }}
+        style={{ background: "transparent" }}
       />
 
       {/* Floating controls */}
@@ -556,18 +591,7 @@ export default function FreeformCanvas({ images }: Props) {
             {showHelp ? 'Hide' : 'Shortcuts'}
           </button>
         </div>
-
-        {showHelp && (
-          <div className="text-[18px] leading-tight space-y-1">
-            <div><b>Select</b>: Click an image (top-most wins)</div>
-            <div><b>Drag</b>: Left mouse (hold <b>Alt</b> to ignore snapping)</div>
-            <div><b>Zoom</b>: Mouse wheel over selected image</div>
-            <div><b>Rotate</b>: Hold <b>R</b> and move mouse</div>
-            <div><b>Nudge</b>: Arrow keys (Shift = 10px)</div>
-            <div><b>Snap</b>: Grid, cell centers/edges, canvas centers/edges, and other image centers</div>
-          </div>
-        )}
-      </div>
+</div>
     </>
   );
 }
