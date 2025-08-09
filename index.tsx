@@ -2,8 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error: any}> {
-  constructor(props: any) { super(props); this.state = { error: null }; }
+class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, { error: any }> {
+  state = { error: null as any };
+  constructor(props: any) { super(props); }; }
   static getDerivedStateFromError(error: any) { return { error }; }
   componentDidCatch(error: any, info: any) { console.error('Runtime error:', error, info); }
   render() {

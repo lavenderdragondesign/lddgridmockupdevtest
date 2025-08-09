@@ -1,8 +1,6 @@
 import StickerSelector from './components/StickerSelector';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import StickerSelector from './components/StickerSelector';
 import { LayoutMode, ImageState, TextLayer, WatermarkState, BackgroundState, BackgroundType, WatermarkPosition } from './types';
-import StickerSelector from './components/StickerSelector';
 import { FONT_FACES } from './constants';
 import BulkImageResizer from './components/BulkImageResizer';
 // Ensure crisp rendering on high-DPI displays for runtime canvas (not export)
@@ -1080,4 +1078,3 @@ declare global {
 // NOTE: When removing images, remember to call imageBitmap.close() to free memory.
   const isBigLayout = (mode: LayoutMode) =>
     mode === 'left-big' || mode === 'right-big' || mode === 'top-big' || mode === 'bottom-big';
-

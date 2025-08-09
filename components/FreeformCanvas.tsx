@@ -96,7 +96,7 @@ export default function FreeformCanvas({ images }: Props) {
         });
         if (cancelled) return;
         if (prev) {
-          next.push({ ...prev, img: el });
+          next.push({ id: prev.id, img: el, x: prev.x, y: prev.y, scale: prev.scale, rotation: prev.rotation });
         } else {
           const angle = (idx / Math.max(1, images.length)) * Math.PI * 2;
           const radius = 60 + (idx % 5) * 25;
