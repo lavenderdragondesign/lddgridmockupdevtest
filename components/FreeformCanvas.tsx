@@ -446,11 +446,11 @@ export default function FreeformCanvas({ images }: Props) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'r') {
         rotatingRef.current = true;
-        (canvas as any).focus?.();
-      const canvas = canvasRef.current as HTMLCanvasElement;
-      if (canvas) setCanvasCursor(canvas, true);
+        const canv = canvasRef.current as HTMLCanvasElement | null;
+        if (canv && (canv as any).focus) (canv as any).focus();
+        if (canv) setCanvasCursor(canv, true);
       }
-      // arrow key nudge
+// arrow key nudge
       if (activeIdRef.current) {
         const step = e.shiftKey ? 10 : 1;
         let dx = 0, dy = 0;
