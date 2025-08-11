@@ -5,7 +5,8 @@ export type LayoutMode =
   | 'top-big'
   | 'bottom-big'
   | 'single-blur'
-  | 'freeform';
+  | 'grid-square'
+  | 'justified';
 
 export interface ImageState {
   id: string;

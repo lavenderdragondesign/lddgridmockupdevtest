@@ -1,31 +1,10 @@
 import StickerSelector from './components/StickerSelector';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import StickerSelector from './components/StickerSelector';
 import { LayoutMode, ImageState, TextLayer, WatermarkState, BackgroundState, BackgroundType, WatermarkPosition } from './types';
+import StickerSelector from './components/StickerSelector';
 import { FONT_FACES } from './constants';
 import BulkImageResizer from './components/BulkImageResizer';
-// Ensure crisp rendering on high-DPI displays for runtime canvas (not export)
-function ensureHiDPICanvas(canvas: HTMLCanvasElement) {
-  const rect = canvas.getBoundingClientRect();
-  const dpr = Math.max(1, (typeof window !== 'undefined' && (window.devicePixelRatio || 1)) ? window.devicePixelRatio : 1);
-  const pw = Math.floor(rect.width * dpr);
-  const ph = Math.floor(rect.height * dpr);
-  if (canvas.width !== pw || canvas.height !== ph) {
-    canvas.width = pw;
-    canvas.height = ph;
-  }
-  // Use CSS pixels for layout math; scale context by DPR
-  const logicalW = rect.width;
-  const logicalH = rect.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  ctx.imageSmoothingEnabled = true;
-  // setTransform is already applied in ensureHiDPICanvas
-
-  if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { logicalW, logicalH, dpr };
-}
-
-import FreeformCanvas from './components/FreeformCanvas';
 
 // HELPER & UI COMPONENTS
 
@@ -89,9 +68,7 @@ const Slider = React.memo<SliderProps>(({ label, icon, value, onChange, min = 0,
       <span className={`text-sm font-mono bg-gray-200 text-gray-800 px-2 py-1 rounded-md w-16 text-center ${disabled ? 'text-gray-400' : ''}`}>{value}{unit}</span>
     </div>
   </div>
-));
-
-interface ToggleProps {
+));interface ToggleProps {
   label: string;
   icon: string;
   checked: boolean;
@@ -148,20 +125,12 @@ export default function App() {
   }, [images]);
   
   const [globalZoom, setGlobalZoom] = useState(1);
-  const [gap, setGap] = useState(16);
-  
-  const [freeformTidyTick, setFreeformTidyTick] = useState(0);
-const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
+  const [gap, setGap] = useState(16);const [fixedCols, setFixedCols] = useState(3);const [justifiedTarget, setJustifiedTarget] = useState(220);
+  const [fitAll, setFitAll] = useState(true);const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
   const imageFit = 'contain'; // Hardcoded
   const [mainZoom, setMainZoom] = useState(1);
   const [bgBlur, setBgBlur] = useState(10);
   const [bgOpacity, setBgOpacity] = useState(0.3);
-  useEffect(() => {
-    if (layoutMode === 'freeform') {
-      setFreeformTidyTick(t => t + 1); // signal Freeform to tidy on mode switch
-    }
-  }, [layoutMode]);
-
 
   // Debounced states for performance
   const debouncedGlobalZoom = useDebouncedValue(globalZoom, 50);
@@ -169,6 +138,7 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
   const debouncedMainZoom = useDebouncedValue(mainZoom, 50);
   const debouncedBgBlur = useDebouncedValue(bgBlur, 50);
   const debouncedBgOpacity = useDebouncedValue(bgOpacity, 50);
+  const debouncedJustifiedTarget = useDebouncedValue(justifiedTarget, 50);
 
   // New State
   const [background, setBackground] = useState<BackgroundState>({ type: 'color', value: '#F3F4F6' });
@@ -229,6 +199,13 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
       event.target.value = ''; // Reset input
     }
   };
+  const handleFolderUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      addImages(event.target.files);
+      event.target.value = ''; // Reset input
+    }
+  };
+
 
   const handleWatermarkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -301,7 +278,7 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
     const EXPORT_WIDTH = 2000;
     const EXPORT_HEIGHT = 1500;
 
-    const { logicalW: currentWidth, logicalH: currentHeight } = forExport ? { logicalW: EXPORT_WIDTH, logicalH: EXPORT_HEIGHT } : ensureHiDPICanvas(canvas);
+    const { width: currentWidth, height: currentHeight } = forExport ? { width: EXPORT_WIDTH, height: EXPORT_HEIGHT } : canvas;
     
     const scaleX = forExport ? EXPORT_WIDTH / viewport.width : 1;
     const scaleY = forExport ? EXPORT_HEIGHT / viewport.height : 1;
@@ -361,11 +338,9 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
     const exportGapX = debouncedGap * scaleX;
     const exportGapY = debouncedGap * scaleY;
 
-    switch (layoutMode) {
-        case 'freeform': {
-            // Images drawn by FreeformCanvas overlay; skip here.
-            break;
-        }
+    const layoutPlacements: {img: ImageBitmap, x:number, y:number, w:number, h:number}[] = [];
+
+switch (layoutMode) {
         case 'grid': {
             if (loadedGridImages.length === 0) break;
             const cols = Math.max(1, Math.ceil(Math.sqrt(loadedGridImages.length)));
@@ -479,9 +454,112 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
             }
             break;
         }
-    }
+        case 'grid-square': {
+if (loadedGridImages.length > 0) {
+                const cols = Math.max(1, Math.ceil(Math.sqrt(loadedGridImages.length)));
+                const rows = Math.max(1, Math.ceil(loadedGridImages.length / cols));
+                const cell = Math.max(0, Math.min(
+                    (currentWidth - (cols + 1) * exportGapX) / cols,
+                    (currentHeight - (rows + 1) * exportGapY) / rows
+                ));
+                loadedGridImages.forEach((img, i) => {
+                    const col = i % cols;
+                    const row = Math.floor(i / cols);
+                    const x = exportGapX + col * (cell + exportGapX);
+                    const y = exportGapY + row * (cell + exportGapY);
+                    layoutPlacements.push({ img, x, y, w: cell, h: cell });
+                });
+            }
 
-    // 3. Draw Watermark
+            break;
+        }
+        
+        
+
+        
+        
+        case 'justified': {
+
+            const targetRowH = Math.max(60, Math.min(480, debouncedJustifiedTarget || 220)) * scaleY;
+            let i = 0;
+            const rows: {items: {img: ImageBitmap, w:number, h:number}[], h:number}[] = [];
+            while (i < loadedGridImages.length) {
+                const rowStart = i;
+                let arSum = 0;
+                while (i < loadedGridImages.length) {
+                    const img = loadedGridImages[i];
+                    arSum += img.width / img.height;
+                    const gaps = (i - rowStart) * exportGapX;
+                    const widthNeeded = arSum * targetRowH + gaps;
+                    if (widthNeeded >= currentWidth * 0.9) { i++; break; }
+                    i++;
+                }
+                const rowEnd = i;
+                if (rowEnd <= rowStart) break;
+                const totalGap = Math.max(0, rowEnd - rowStart - 1) * exportGapX;
+                const scale = (currentWidth * 0.9 - totalGap) / (arSum * targetRowH);
+                const rowH = targetRowH * scale;
+                const items = [];
+                for (let j = rowStart; j < rowEnd; j++) {
+                    const img = loadedGridImages[j];
+                    const w = (img.width / img.height) * rowH;
+                    items.push({ img, w, h: rowH });
+                }
+                rows.push({ items, h: rowH });
+            }
+            // Leftover row if any
+            if (i < loadedGridImages.length) {
+                const leftover = loadedGridImages.slice(i);
+                const arSum = leftover.reduce((s, im) => s + im.width / im.height, 0);
+                const totalGap = Math.max(0, leftover.length - 1) * exportGapX;
+                const rowH = Math.max(30, (currentWidth * 0.9 - totalGap) / Math.max(arSum, 0.0001));
+                const items = leftover.map(img => ({ img, w: (img.width / img.height) * rowH, h: rowH }));
+                rows.push({ items, h: rowH });
+            }
+            let yCursor = 0;
+            for (const row of rows) {
+                const rowW = row.items.reduce((s,it)=>s+it.w,0) + Math.max(0,row.items.length-1)*exportGapX;
+                let x = (currentWidth - rowW) / 2;
+                for (const it of row.items) {
+                    layoutPlacements.push({ img: it.img, x, y: yCursor, w: it.w, h: it.h });
+                    x += it.w + exportGapX;
+                }
+                yCursor += row.h + exportGapY;
+            }
+    
+
+
+            break;
+        }
+        
+
+}
+    
+    // Final draw pass for placement-based layouts
+    if (layoutPlacements.length > 0) {
+        // compute bounding box
+        let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+        for (const p of layoutPlacements) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x + p.w > maxX) maxX = p.x + p.w;
+            if (p.y + p.h > maxY) maxY = p.y + p.h;
+        }
+        if (!isFinite(minX)) { minX = 0; minY = 0; }
+        const layoutW = Math.max(1, maxX - minX);
+        const layoutH = Math.max(1, maxY - minY);
+        const sx = (currentWidth - exportGapX * 2) / layoutW;
+        const sy = (currentHeight - exportGapY * 2) / layoutH;
+        const s = fitAll ? Math.min(1, sx, sy) : 1;
+        const scaledW = layoutW * s;
+        const scaledH = layoutH * s;
+        const offsetX = (currentWidth - scaledW) / 2 - minX * s;
+        const offsetY = (currentHeight - scaledH) / 2 - minY * s;
+        for (const p of layoutPlacements) {
+            drawImage(p.img, p.x * s + offsetX, p.y * s + offsetY, p.w * s, p.h * s);
+        }
+    }
+// 3. Draw Watermark
     if (watermark && watermarkBitmap && watermarkBitmap.width > 0 && watermarkBitmap.height > 0) {
         ctx.save();
         ctx.globalAlpha = watermark.opacity;
@@ -535,7 +613,7 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
       ctx.fillText(layer.text, 0, 0);
       ctx.restore();
     }
-  }, [background, backgroundBitmap, debouncedBgBlur, debouncedBgOpacity, debouncedGap, debouncedGlobalZoom, debouncedMainZoom, imageBitmaps, images, layoutMode, textLayers, viewport.width, viewport.height, watermark, watermarkBitmap, bigImageId]);
+  }, [background, backgroundBitmap, debouncedBgBlur, debouncedBgOpacity, debouncedGap, debouncedGlobalZoom, debouncedMainZoom, imageBitmaps, images, layoutMode, textLayers, viewport.width, viewport.height, watermark, watermarkBitmap, debouncedJustifiedTarget, fitAll, bigImageId]);
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -547,8 +625,7 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
       images, layoutMode, textLayers, watermark, background, 
       debouncedGap, debouncedGlobalZoom, debouncedMainZoom, debouncedBgBlur, debouncedBgOpacity,
       imageBitmaps, watermarkBitmap, backgroundBitmap, viewport.width, viewport.height,
-      selectedTextId, drawCanvas
-  , bigImageId]);
+      selectedTextId, drawCanvas, debouncedJustifiedTarget, fitAll, bigImageId]);
   
   useEffect(() => {
     if (window.lucide) window.lucide.createIcons();
@@ -777,11 +854,29 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
         </div>
         {/* Main Upload Button */}
         <div className="pt-4 pb-2 flex flex-col items-center">
-          <label htmlFor="imageUpload" className="flex-shrink-0 flex flex-col items-center justify-center w-28 h-28 bg-gray-200 hover:bg-gray-300 rounded-lg cursor-pointer transition-colors text-gray-500 hover:text-gray-800">
-            <Icon name="upload-cloud" className="w-10 h-10" />
-            <span className="text-sm mt-1">Upload</span>
-            <input id="imageUpload" type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
-          </label>
+          
+<div className="flex flex-col items-center gap-6 mt-4">
+  {/* Upload */}
+  <label className="flex flex-col items-center justify-center w-32 h-32 bg-gray-100 rounded-lg shadow-md hover:bg-gray-200 transition p-6 cursor-pointer">
+    <Icon name="upload" className="w-10 h-10 mb-2" />
+    <span className="text-sm">Upload</span>
+    <input type="file" className="hidden" onChange={handleImageUpload} />
+  </label>
+
+  {/* Select Folder */}
+  <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-md shadow hover:bg-gray-200 transition cursor-pointer">
+    <Icon name="folder" className="w-5 h-5" />
+    <span className="text-sm font-medium">Select Folder</span>
+    <input
+      type="file"
+      className="hidden"
+      webkitdirectory="true"
+      onChange={handleFolderUpload}
+    />
+  </label>
+</div>
+
+
         </div>
         {/* Tools Section */}
         <div className="space-y-2 pt-2 pb-4 border-b border-gray-200">
@@ -835,13 +930,38 @@ const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
                     <label htmlFor="layout-mode" className="text-sm font-medium text-gray-600 flex items-center space-x-2 mb-2"><Icon name="layout-template" /><span>Mode</span></label>
                     <select id="layout-mode" value={layoutMode} onChange={e => setLayoutMode(e.target.value as LayoutMode)} className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-lime-500 focus:border-lime-500 block w-full p-2.5">
                         <option value="grid">Grid</option>
-                        <option value="freeform">Freeform (drag/zoom/rotate)</option>
                         <option value="single-blur">Single Focus</option>
                         <option value="left-big">Left Big</option>
                         <option value="right-big">Right Big</option>
                         <option value="top-big">Top Big</option>
-                        <option value="bottom-big">Bottom Big</option>
-                    </select>
+                        <option value="bottom-big">Bottom Big</option>  <option value="grid-square">Grid – Square</option>
+  <option value="justified">Justified Rows</option>
+</select>
+        <div id="layout-extra-controls" className="grid grid-cols-2 gap-2 mt-2">
+  {(layoutMode === 'justified') && (
+    <label className="col-span-2 text-xs opacity-70">
+      Target Row Height (px)
+      <input
+        type="range"
+        min={60}
+        max={480}
+        step={10}
+        className="w-full mt-1"
+        value={justifiedTarget}
+        onChange={e => setJustifiedTarget(Number(e.target.value) || 200)}
+      />
+    </label>
+  )}
+  <label className="col-span-2 text-xs flex items-center gap-2">
+    <input
+      type="checkbox"
+      checked={fitAll}
+      onChange={e => setFitAll(e.target.checked)}
+    />
+    <span>Always fit everything inside canvas (auto-scale)</span>
+  </label>
+</div>
+    
                     {isBigLayout(layoutMode) && images.length > 0 && (
                       <div className="mt-3">
                         <label className="block text-xs font-semibold uppercase tracking-wide mb-2 text-gray-700">Big image</label>
@@ -975,7 +1095,6 @@ Text Layers</h2>
         onMouseDown={handleResizeMouseDown}
         className="w-1.5 h-full cursor-col-resize bg-gray-200 hover:bg-lime-500 active:bg-lime-500 transition-colors duration-200 flex-shrink-0"
       />
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col p-4 bg-gray-100 min-w-0"
         onDragOver={handleDragOver}
@@ -983,19 +1102,13 @@ Text Layers</h2>
         onDrop={handleDrop}
       >
         <div className={`flex-1 bg-white rounded-lg border-2 border-dashed relative overflow-hidden transition-all duration-300 ${isDraggingOver ? 'border-lime-500 border-solid ring-4 ring-lime-500/30' : 'border-gray-300'}`}>
-          
           <canvas
             ref={canvasRef}
             className="absolute top-0 left-0 w-full h-full"
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          />
-          {layoutMode === 'freeform' && (
-            <FreeformCanvas images={images} forceTidyTick={freeformTidyTick} />
-          )}
-    
+            onMouseLeave={handleMouseUp} />
           {isDraggingOver && (
             <div className="absolute inset-0 bg-gray-900/50 flex flex-col items-center justify-center text-white pointer-events-none z-10">
               <Icon name="upload-cloud" className="w-24 h-24" />
