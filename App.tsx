@@ -100,8 +100,9 @@ type InteractionState = {
 
 // MAIN APPLICATION COMPONENT
 export default function App() {
+  // --- Filename label UI state (moved) ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number>(0);
+const rafRef = useRef<number>(0);
   const isResizingRef = useRef(false);
   
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
@@ -111,7 +112,23 @@ export default function App() {
     mode === 'left-big' || mode === 'right-big' || mode === 'top-big' || mode === 'bottom-big';
 
   const [images, setImages] = useState<ImageState[]>([]);
-  // Big Image selection for 'big' layouts
+  
+
+
+    // Map an ImageBitmap back to its source name
+    const getBitmapName = (bmp: ImageBitmap): string => {
+      for (const im of images) {
+        const b = imageBitmaps.get(im.id);
+        if (b && b === bmp) {
+          const fname = im.file?.name || (im.url ? im.url.split('/').pop() : '') || 'image';
+          return fname;
+        }
+      }
+      return 'image';
+    };
+
+  
+// Big Image selection for 'big' layouts
   const [bigImageId, setBigImageId] = useState<string | null>(null);
   // Keep bigImageId valid when image list changes
   useEffect(() => {
@@ -127,6 +144,7 @@ export default function App() {
   const [globalZoom, setGlobalZoom] = useState(1);
   const [gap, setGap] = useState(16);const [fixedCols, setFixedCols] = useState(3);const [justifiedTarget, setJustifiedTarget] = useState(220);
   const [fitAll, setFitAll] = useState(true);const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
+  const labelsProhibited = layoutMode === 'justified' || layoutMode === 'grid-square';
   const imageFit = 'contain'; // Hardcoded
   const [mainZoom, setMainZoom] = useState(1);
   const [bgBlur, setBgBlur] = useState(10);
@@ -139,9 +157,24 @@ export default function App() {
   const debouncedBgBlur = useDebouncedValue(bgBlur, 50);
   const debouncedBgOpacity = useDebouncedValue(bgOpacity, 50);
   const debouncedJustifiedTarget = useDebouncedValue(justifiedTarget, 50);
+  // --- Filename label UI state ---
+  const [showFilenameLabels, setShowFilenameLabels] = useState(true);
+  const [filenameFontSize, setFilenameFontSize] = useState(13);
+  const [filenameLabelHeight, setFilenameLabelHeight] = useState(20);
+  const [labelTextColor, setLabelTextColor] = useState('#ffffff');
+  const [labelBgEnabled, setLabelBgEnabled] = useState(true);
+  const [labelBgColor, setLabelBgColor] = useState('#000000');
+  const [labelBgOpacity, setLabelBgOpacity] = useState(1);
+  const [labelRenderMode, setLabelRenderMode] = useState('overlay' as 'overlay' | 'outside');
+  const [labelPosition, setLabelPosition] = useState('bottom' as 'top' | 'bottom');
+  const [labelOutsideReserve] = useState(false);  // draw labels outside without reserving space
+  useEffect(() => {
+    setFilenameLabelHeight(Math.max(16, Math.round(filenameFontSize * 1.6)));
+  }, [filenameFontSize]);
+
 
   // New State
-  const [background, setBackground] = useState<BackgroundState>({ type: 'color', value: '#F3F4F6' });
+const [background, setBackground] = useState<BackgroundState>({ type: 'color', value: '#000000' });
   const [watermark, setWatermark] = useState<WatermarkState | null>(null);
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
@@ -162,7 +195,6 @@ export default function App() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   // BulkImageResizer Modal State
   const [showBulkResizer, setShowBulkResizer] = useState(false);
-
   // Helper to generate compatible IDs
   const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2);
 
@@ -305,17 +337,30 @@ export default function App() {
     }
 
     // 2. Draw Image Grid/Layout
-    const drawImage = (img: ImageBitmap, x: number, y: number, w: number, h: number, extraZoom: number = 1) => {
-        if (w <= 0 || h <= 0 || img.width <= 0 || img.height <= 0) return;
+    const drawImage = (img: ImageBitmap | undefined | null, x: number, y: number, w: number, h: number, extraZoom: number = 1) => {
+        if (!img || w <= 0 || h <= 0 || img.width <= 0 || img.height <= 0) return;
         const zoom = debouncedGlobalZoom * extraZoom;
         
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x, y, w, h);
+        ctx.rect(x, y, w, h)
         ctx.clip();
 
+        // If using 'outside' labels, reserve a strip (lh) so image doesn't overlap the label space
+        let effX = x, effY = y, effW = w, effH = h;
+        if (showFilenameLabels && labelRenderMode === 'outside' && labelOutsideReserve) {
+            const lh = Math.min(h * 0.25, Math.round(filenameLabelHeight * scaleY));
+            if (labelPosition === 'bottom') {
+                effH = Math.max(1, h - lh);
+            } else {
+                // top: push image area down
+                effY = y + lh;
+                effH = Math.max(1, h - lh);
+            }
+        }
+
         const imgRatio = img.width / img.height;
-        const cellRatio = w / h;
+        const cellRatio = effW / effH;
         
         let baseW, baseH;
         if (imgRatio > cellRatio) {
@@ -328,10 +373,13 @@ export default function App() {
 
         const renderW = baseW * zoom;
         const renderH = baseH * zoom;
-        const renderX = x + (w - renderW) / 2;
-        const renderY = y + (h - renderH) / 2;
+        const renderX = effX + (effW - renderW) / 2;
+        const renderY = effY + (effH - renderH) / 2;
 
         ctx.drawImage(img, renderX, renderY, renderW, renderH);
+        if (showFilenameLabels) {
+          layoutPlacements.push({ bmp: img, x, y, w, h });
+        }
         ctx.restore();
     };
 
@@ -579,8 +627,89 @@ if (loadedGridImages.length > 0) {
         ctx.drawImage(watermarkBitmap, x, y, w, h);
         ctx.restore();
     }
-    
-    // 4. Draw text layers (for both UI and export)
+// 3.5 Draw per-image filename labels (optional)
+    if (showFilenameLabels && layoutPlacements.length > 0 && layoutMode !== 'justified' && layoutMode !== 'grid-square') {
+      ctx.restore?.();
+      ctx.save();
+      // Ensure labels are never clipped by prior image clipping
+      ctx.beginPath();
+      ctx.rect(0, 0, currentWidth, currentHeight);
+      ctx.clip();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const baseFontPx = Math.round(filenameFontSize * debouncedGlobalZoom * scaleY);
+      ctx.font = `${baseFontPx}px 'Inter, Arial, sans-serif'`;
+
+      // Wrap to at most two lines that fit maxWidth
+      const wrapTwoLines = (text: string, maxWidth: number) => {
+        const fits = (t: string) => ctx.measureText(t).width <= maxWidth;
+        if (fits(text)) return [text];
+        const words = text.split(/\s+/).filter(Boolean);
+        if (words.length <= 1) {
+          // hard split
+          let a = text.slice(0, Math.ceil(text.length/2));
+          let b = text.slice(a.length);
+          while ((!fits(a) || !fits(b)) && a.length > 1) {  // placeholder, will replace below
+            a = a.slice(0, -1);
+            b = text.slice(a.length);
+          }
+          return [a, b];
+        }
+        // try every split
+        for (let i = 1; i < words.length; i++) {
+          const l1 = words.slice(0, i).join(' ');
+          const l2 = words.slice(i).join(' ');
+          if (fits(l1) && fits(l2)) return [l1, l2];
+        }
+        // fallback: split in halves then ellipsize second line if needed
+        let l1 = words.slice(0, Math.ceil(words.length/2)).join(' ');
+        let l2 = words.slice(Math.ceil(words.length/2)).join(' ');
+        while (!fits(l2) && l2.length > 3) l2 = l2.slice(0, -2);
+        if (!fits(l2)) l2 = l2 + '…';
+        return [l1, l2];
+      };
+
+      for (const p of layoutPlacements) {
+        let name = getBitmapName(p.bmp).replace(/\.(png|jpg|jpeg|webp|gif)$/i, '');
+        const maxWidth = p.w - 8 * scaleX;
+        const lines = wrapTwoLines(name, maxWidth).slice(0, 2);
+        const lineHeight = Math.round(baseFontPx * 1.15);
+        const linesCount = lines.length;
+        const padY = Math.round(baseFontPx * 0.35);
+        const stripH = Math.min(p.h * 0.45, (lineHeight * linesCount) + padY * 2);
+        const rx = p.x;
+        const cx = rx + p.w / 2;
+
+        // Compute strip top depending on mode/position
+        const gap = 5 * scaleY;
+        let stripTop: number;
+        if (labelRenderMode === 'outside') {
+          stripTop = (labelPosition === 'top') ? (p.y - gap - stripH) : (p.y + p.h + gap);
+        } else {
+          stripTop = (labelPosition === 'top') ? p.y : Math.max(p.y + p.h - stripH, p.y);
+        }
+
+        // Background
+        if (labelBgEnabled) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, labelBgOpacity));
+          ctx.fillStyle = labelBgColor || '#000';
+          ctx.fillRect(rx, stripTop, p.w, stripH);
+          ctx.restore();
+        }
+
+        // Text
+        ctx.fillStyle = labelTextColor || '#000';
+        const totalTextH = lineHeight * linesCount;
+        let startY = stripTop + (stripH - totalTextH) / 2 + lineHeight / 2;
+        for (let i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], cx, startY + i * lineHeight);
+        }
+      }
+      ctx.restore();
+    }
+
+// 4. Draw text layers (for both UI and export)
     for (const layer of textLayers) {
       ctx.save();
       const x = layer.x * scaleX;
@@ -613,7 +742,7 @@ if (loadedGridImages.length > 0) {
       ctx.fillText(layer.text, 0, 0);
       ctx.restore();
     }
-  }, [background, backgroundBitmap, debouncedBgBlur, debouncedBgOpacity, debouncedGap, debouncedGlobalZoom, debouncedMainZoom, imageBitmaps, images, layoutMode, textLayers, viewport.width, viewport.height, watermark, watermarkBitmap, debouncedJustifiedTarget, fitAll, bigImageId]);
+  }, [background, backgroundBitmap, debouncedBgBlur, debouncedBgOpacity, debouncedGap, debouncedGlobalZoom, debouncedMainZoom, imageBitmaps, images, layoutMode, textLayers, viewport.width, viewport.height, watermark, watermarkBitmap, debouncedJustifiedTarget, fitAll, bigImageId, showFilenameLabels, filenameFontSize, filenameLabelHeight, labelTextColor, labelBgEnabled, labelBgColor, labelBgOpacity, labelPosition, labelRenderMode]);
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -625,7 +754,7 @@ if (loadedGridImages.length > 0) {
       images, layoutMode, textLayers, watermark, background, 
       debouncedGap, debouncedGlobalZoom, debouncedMainZoom, debouncedBgBlur, debouncedBgOpacity,
       imageBitmaps, watermarkBitmap, backgroundBitmap, viewport.width, viewport.height,
-      selectedTextId, drawCanvas, debouncedJustifiedTarget, fitAll, bigImageId]);
+      selectedTextId, drawCanvas, debouncedJustifiedTarget, fitAll, bigImageId, showFilenameLabels, filenameFontSize, filenameLabelHeight, labelTextColor, labelBgEnabled, labelBgColor, labelBgOpacity, labelPosition, labelRenderMode]);
   
   useEffect(() => {
     if (window.lucide) window.lucide.createIcons();
@@ -886,7 +1015,7 @@ if (loadedGridImages.length > 0) {
               className="w-full bg-lime-500 hover:bg-lime-600 text-black font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors"
               onClick={() => setShowBulkResizer(true)}
             >
-              <Icon name="resize" className="w-5 h-5" />
+              <Icon name="grip-vertical" className="w-5 h-5" />
               <span>Bulk Image Resize</span>
             </button>
             <button
@@ -1074,6 +1203,55 @@ Text Layers</h2>
         {/* Export Controls */}
         <div className="space-y-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
              <h2 className="text-lg font-semibold text-gray-900">Export</h2>
+             {/* Per-image filename labels */}
+             <label className="inline-flex items-center gap-2 mt-2">
+               <input type="checkbox" checked={showFilenameLabels} onChange={e => setShowFilenameLabels(e.target.checked)} />
+               <span className="text-sm text-gray-700">Show file name under each image</span>
+             </label>
+             <div className={`${(showFilenameLabels && !labelsProhibited) ? "" : "opacity-50 pointer-events-none"} mt-2`}>
+               <div className="grid grid-cols-2 gap-3">
+                 <div>
+                   <label className="block text-sm text-gray-700">Label text size</label>
+                   <input type="range" min={10} max={48} step={1} value={filenameFontSize} onChange={e => setFilenameFontSize(parseInt(e.target.value))} className="w-full" />
+                   <div className="text-xs text-gray-600 mt-1">{filenameFontSize}px</div>
+                 </div>
+                 <div>
+                   <label className="block text-sm text-gray-700">Position</label>
+                   <select className="w-full border rounded p-1 mt-1" value={labelPosition} onChange={e => setLabelPosition((e.target.value as 'top' | 'bottom'))}>
+                     <option value="bottom">Bottom overlay</option>
+                     <option value="top">Top overlay</option>
+                   </select>
+                 </div>
+                 <div>
+                   <label className="block text-sm text-gray-700">Label mode</label>
+                   <select className="w-full border rounded p-1" value={labelRenderMode} onChange={e => setLabelRenderMode((e.target.value as 'overlay' | 'outside'))}>
+                     <option value="overlay">Overlay (on image)</option>
+                     <option value="outside">Outside (reserve space)</option>
+                   </select>
+                 </div>
+                 <div>
+                   <label className="block text-sm text-gray-700">Text color</label>
+                   <input type="color" className="w-full h-8 p-0 border rounded" value={labelTextColor} onChange={e => setLabelTextColor(e.target.value)} />
+                 </div>
+                 <div>
+                   <label className="block text-sm text-gray-700">Background</label>
+                   <div className="flex items-center gap-2">
+                     <input type="checkbox" checked={labelBgEnabled} onChange={e => setLabelBgEnabled(e.target.checked)} />
+                     <span className="text-sm">Enable</span>
+                   </div>
+                 </div>
+                 <div>
+                   <label className="block text-sm text-gray-700">Bg color</label>
+                   <input type="color" className="w-full h-8 p-0 border rounded" value={labelBgColor} onChange={e => setLabelBgColor(e.target.value)} disabled={!labelBgEnabled} />
+                 </div>
+                 <div>
+                   <label className="block text-sm text-gray-700">Bg opacity</label>
+                   <input type="range" min={0} max={1} step={0.05} value={labelBgOpacity} onChange={e => setLabelBgOpacity(parseFloat(e.target.value))} className="w-full" disabled={!labelBgEnabled} />
+                   <div className="text-xs text-gray-600 mt-1">{Math.round(labelBgOpacity*100)}%</div>
+                 </div>
+               </div>
+             </div>
+        
              <input type="text" value={exportName} onChange={e => setExportName(e.target.value)} placeholder="filename.png" className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-lime-500 focus:border-lime-500 block w-full p-2.5" />
              <button onClick={handleExport} disabled={isExporting} className="w-full bg-lime-500 hover:bg-lime-600 text-black font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors disabled:bg-gray-400 disabled:cursor-wait">
                 {isExporting ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="download" />}
@@ -1190,4 +1368,4 @@ declare global {
 }
 // NOTE: When removing images, remember to call imageBitmap.close() to free memory.
   const isBigLayout = (mode: LayoutMode) =>
-    mode === 'left-big' || mode === 'right-big' || mode === 'top-big' || mode === 'bottom-big';
+    mode === 'left-big' || mode === 'right-big' || mode === 'top-big' || mode === 'bottom-big';// --- Filename label UI state ---
